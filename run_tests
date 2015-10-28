@@ -1,0 +1,1 @@
+cargo test --release --jobs 2 -- --nocapture
