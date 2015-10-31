@@ -393,8 +393,9 @@ pub fn bit_flip_encrypt(plaintext: String) -> Vec<u8> {
 pub fn bit_flip_is_admin(ciphertext: Vec<u8>) -> bool {
     let key = "cryptopals key!?".to_string().into_bytes();
     let iv = [0; 16].to_vec();
-    let decrypted = block_cipher::decrypt_aes_cbc_128(ciphertext, key, iv);
-    let admin_string = ";admin=true;".to_string();
+    let mut decrypted = block_cipher::decrypt_aes_cbc_128(ciphertext, key, iv);
+    decrypted = block_cipher::strip_pkcs7_padding(decrypted);
+    let admin_string = "admin=true".to_string();
     for section in decrypted.split(|&x| x == ';' as u8) {
         match String::from_utf8(section.to_vec()) {
             Ok(s) => {
@@ -407,6 +408,37 @@ pub fn bit_flip_is_admin(ciphertext: Vec<u8>) -> bool {
     }
 
     false
+}
+
+pub fn break_bit_flip() -> Vec<u8> {
+    let encrypted = bit_flip_encrypt(":admin<true".to_string());
+    // The prefix before our plaintext is exactly two blocks (32 bytes)
+    // So, we need to modify the second block to produce admin=true
+    // in the third block
+    // We need to modify byte 0 and byte 6 to change this string to
+    // ;admin=true
+
+    let mut modified_cipher: Vec<u8> = Vec::new();
+
+    // Brute force the two bytes we need flipped
+    'outer: for byte1 in 0..127 as u8 {
+        for byte2 in 0..127 as u8 {
+            let mut mask = util::repeat_str_to_bytes("\x00", 16);
+            mask.extend([byte1; 1].to_vec());
+            mask.extend(util::repeat_str_to_bytes("\x00", 5));
+            mask.extend([byte2; 1].to_vec());
+            let bytes_remaining: u32 = (encrypted.clone().len() - mask.len()) as u32;
+            mask.extend(util::repeat_str_to_bytes("\x00", bytes_remaining));
+
+            let flipped = util::xor_bytes(encrypted.clone(), mask);
+            if bit_flip_is_admin(flipped.clone()) {
+                modified_cipher = flipped.clone();
+                break 'outer;
+            }
+        }
+    }
+
+    modified_cipher
 }
 
 #[cfg(test)]
@@ -665,7 +697,6 @@ mod tests {
 
     #[test]
     fn set_2_challenge_16() {
-        // Check for false positives
-        assert!(!bit_flip_is_admin(bit_flip_encrypt("FOO".to_string())));
+        assert!(bit_flip_is_admin(break_bit_flip()));
     }
 }
