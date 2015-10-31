@@ -9,6 +9,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
 
+pub fn repeat_str_to_bytes(s: &str, length: u32) -> Vec<u8> {
+    (0..length).map(|_| s).collect::<String>().into_bytes()
+}
+
 pub fn hex_to_base64(hex: &str) -> String {
     let bytes = hex_to_bytes(hex);
     bytes_to_base64(bytes)

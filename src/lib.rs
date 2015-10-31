@@ -228,6 +228,90 @@ pub fn byte_at_a_time_ecb(plaintext: Vec<u8>) -> Vec<u8> {
     block_cipher::encrypt_aes_ecb_128(&padded[..], &key[..]).unwrap()
 }
 
+// Use this instead of a closure to remember the random prefix
+pub struct RandomECB {
+    prefix: Vec<u8>,
+}
+
+impl RandomECB {
+
+    fn new() -> RandomECB {
+        let mut rng = rand::thread_rng();
+        let num_random = (rng.gen::<u8>()) as usize;
+        RandomECB { prefix: util::random_bytes(num_random) }
+    }
+
+    fn encrypt(&self, plaintext: Vec<u8>) -> Vec<u8> {
+        let mut random_bytes = self.prefix.clone();
+        random_bytes.extend(plaintext);
+        byte_at_a_time_ecb(random_bytes)
+    }
+
+}
+
+pub fn decrypt_prefix_ecb_byte_by_byte(encryptor: RandomECB) -> String {
+
+    let block_size: u32 = 16;
+    let test_char = "A";
+
+    // Calculate length of prefix
+    let dupe_blocks = util::repeat_str_to_bytes(test_char, block_size * 2);
+    let mut padding_to_block = 0;
+    let mut plaintext_start = 0;
+
+    'outer: for extra in (0..block_size) {
+        let mut plaintext = util::repeat_str_to_bytes(test_char, extra);
+        plaintext.extend(dupe_blocks.clone());
+        let encrypted = encryptor.encrypt(plaintext);
+        let blocks = block_cipher::break_into_blocks(encrypted, block_size);
+        for index in (0..blocks.len() - 1) {
+            if blocks[index] == blocks[index + 1] {
+                padding_to_block = extra;
+                plaintext_start = index;
+                break 'outer;
+            }
+        }
+    }
+
+    let prefix_padding = util::repeat_str_to_bytes("A", padding_to_block);
+    let mut decrypted = Vec::new();
+    let num_blocks = block_cipher::break_into_blocks(encryptor.encrypt(prefix_padding.clone()),
+                                                     block_size)
+                         .len();
+
+    let mut block_to_decode = plaintext_start;
+    loop {
+        for length in (0..block_size).rev() {
+            let mut message = prefix_padding.clone();
+            let short_block = (0..length).map(|_| "A").collect::<String>().into_bytes();
+            message.extend(short_block.clone());
+            let encrypted_bytes = encryptor.encrypt(message);
+            let encrypted_blocks = block_cipher::break_into_blocks(encrypted_bytes.clone(),
+                                                                   block_size);
+            let first_block = encrypted_blocks[block_to_decode].clone();
+
+            for char in 0..127 as u8 {
+                let mut plaintext = prefix_padding.clone();
+                plaintext.extend(short_block.clone());
+                plaintext.extend(decrypted.clone());
+                plaintext.push(char);
+                let blocks = block_cipher::break_into_blocks(encryptor.encrypt(plaintext),
+                                                             block_size);
+                if first_block == blocks[block_to_decode] {
+                    decrypted.push(char);
+                    break;
+                }
+            }
+        }
+        block_to_decode += 1;
+        if block_to_decode >= num_blocks {
+            break;
+        }
+    }
+
+    String::from_utf8(block_cipher::strip_pkcs7_padding(decrypted.clone())).unwrap()
+}
+
 pub fn decrypt_ecb_byte_by_byte() -> String {
     let mut decrypted = Vec::new();
     let block_size = 16;
@@ -288,6 +372,41 @@ pub fn profile_for(email: String) -> Vec<u8> {
     let profile: String = "email=".to_string() + &cleaned + "&uid=10&role=user";
     let padded = block_cipher::add_pkcs7_padding(profile.into_bytes(), 16);
     block_cipher::encrypt_aes_ecb_128(&padded[..], "YELLOW SUBMARINE".as_bytes()).unwrap()
+}
+
+pub fn bit_flip_encrypt(plaintext: String) -> Vec<u8> {
+    let prefix = "comment1=cooking%20MCs;userdata=".to_string().into_bytes();
+    let suffix = ";comment2=%20like%20a%20pound%20of%20bacon".to_string().into_bytes();
+    let cleaned = plaintext.replace(";", "%3B").replace("=", "%3D").into_bytes();
+
+    let mut message = prefix.clone();
+    message.extend(cleaned);
+    message.extend(suffix);
+
+    let padded = block_cipher::add_pkcs7_padding(message, 16);
+    let key = "cryptopals key!?".to_string().into_bytes();
+    let iv = [0; 16].to_vec();
+
+    block_cipher::encrypt_aes_cbc_128(padded, key, iv)
+}
+
+pub fn bit_flip_is_admin(ciphertext: Vec<u8>) -> bool {
+    let key = "cryptopals key!?".to_string().into_bytes();
+    let iv = [0; 16].to_vec();
+    let decrypted = block_cipher::decrypt_aes_cbc_128(ciphertext, key, iv);
+    let admin_string = ";admin=true;".to_string();
+    for section in decrypted.split(|&x| x == ';' as u8) {
+        match String::from_utf8(section.to_vec()) {
+            Ok(s) => {
+                if s == admin_string {
+                    return true;
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -522,5 +641,31 @@ mod tests {
         let user_profile = decrypt_user_profile(ciphertext);
         assert_eq!(user_profile.get("email").unwrap(), "foo12@foo.com");
         assert_eq!(user_profile.get("role").unwrap(), "admin");
+    }
+
+    #[test]
+    fn set_2_challenge_14() {
+        let encryptor = RandomECB::new();
+        let decrypted = decrypt_prefix_ecb_byte_by_byte(encryptor);
+        assert_eq!(decrypted, solutions::challenge_12());
+    }
+
+    #[test]
+    fn set_2_challenge_15() {
+        assert!(block_cipher::valid_pkcs7_padding("ICE ICE BABY\x04\x04\x04\x04"
+                                                      .to_string()
+                                                      .into_bytes()));
+        assert!(!block_cipher::valid_pkcs7_padding("ICE ICE BABY\x05\x05\x05\x05"
+                                                       .to_string()
+                                                       .into_bytes()));
+        assert!(!block_cipher::valid_pkcs7_padding("ICE ICE BABY\x01\x02\x03\x04"
+                                                       .to_string()
+                                                       .into_bytes()));
+    }
+
+    #[test]
+    fn set_2_challenge_16() {
+        // Check for false positives
+        assert!(!bit_flip_is_admin(bit_flip_encrypt("FOO".to_string())));
     }
 }
