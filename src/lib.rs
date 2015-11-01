@@ -437,6 +437,76 @@ pub fn break_bit_flip() -> Vec<u8> {
     encrypted.clone()
 }
 
+// Return encrypted plaintext and IV
+pub fn cbc_oracle_encrypt(plaintext: Vec<u8>) -> (Vec<u8>, Vec<u8>) {
+    let key = "SeCrEt KeY!?!?!?".to_string().into_bytes();
+    let iv = util::random_bytes(16);
+    let padded = block_cipher::add_pkcs7_padding(plaintext, 16);
+    (block_cipher::encrypt_aes_cbc_128(padded, key, iv.clone()),
+     iv)
+}
+
+pub fn cbc_oracle(ciphertext: Vec<u8>, iv: Vec<u8>) -> bool {
+    let key = "SeCrEt KeY!?!?!?".to_string().into_bytes();
+    let decrypted = block_cipher::decrypt_aes_cbc_128(ciphertext, key, iv);
+    block_cipher::valid_pkcs7_padding(decrypted)
+}
+
+pub fn break_cbc_oracle(ciphertext: Vec<u8>, real_iv: Vec<u8>) -> Vec<u8> {
+
+    let encrypted_blocks = block_cipher::break_into_blocks(ciphertext, 16);
+    let mut decrypted: Vec<u8> = Vec::new();
+
+    // encrypted_blocks[block_num] is the block we are decrypting
+    for block_num in 0..encrypted_blocks.len() {
+
+        let previous_block = match block_num {
+            0 => real_iv.clone(),
+            _ => encrypted_blocks[block_num - 1].clone(),
+        };
+
+        let mut forged_ciphertext = util::random_bytes(16);
+        let mut decrypted_block: Vec<u8> = [0; 16].to_vec();
+        let mut intermediate_state: Vec<u8> = [0; 16].to_vec();
+
+        // Work backwards from last byte to first
+        // Create padding of 1, 22, 333, etc...
+        for byte_num in (0..16).rev() {
+
+            let padding_value = (16 - byte_num) as u8;
+
+            for possible_byte in 0u16..256 {
+                // Mutate byte to try and produce valid padding
+                forged_ciphertext[byte_num] = possible_byte as u8;
+
+                let mut sneaky_ciphertext = forged_ciphertext.clone();
+                sneaky_ciphertext.extend(encrypted_blocks[block_num].clone());
+
+                if cbc_oracle(sneaky_ciphertext, [0; 16].to_vec()) {
+
+                    let intermediate_value = padding_value ^ forged_ciphertext[byte_num];
+                    intermediate_state[byte_num] = intermediate_value;
+
+                    let decrypted_byte = intermediate_value ^ previous_block[byte_num];
+                    decrypted_block[byte_num] = decrypted_byte;
+
+                    // Set up the forged ciphertext for the next round
+                    for flip_byte in byte_num..16 {
+                        forged_ciphertext[flip_byte] = intermediate_state[flip_byte] ^
+                                                       (padding_value + 1);
+                    }
+
+                    break;
+                }
+            }
+        }
+        decrypted.extend(decrypted_block.clone());
+
+    }
+
+    block_cipher::strip_pkcs7_padding(decrypted)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,5 +764,14 @@ mod tests {
     #[test]
     fn set_2_challenge_16() {
         assert!(bit_flip_is_admin(break_bit_flip()));
+    }
+
+    #[test]
+    fn set_3_challenge_17() {
+        for plain_index in 0..10 {
+            let (encrypted, iv) = cbc_oracle_encrypt(solutions::challenge_17(plain_index));
+            let decrypted = break_cbc_oracle(encrypted, iv);
+            assert_eq!(decrypted, solutions::challenge_17(plain_index));
+        }
     }
 }

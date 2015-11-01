@@ -103,6 +103,9 @@ pub fn valid_pkcs7_padding(bytes: Vec<u8>) -> bool {
     if padding_value as usize >= bytes.len() {
         return false;
     }
+    if padding_value == 0 {
+        return false;
+    }
     let mut cloned = bytes.clone();
     for _ in 0..padding_value {
         let val = cloned.pop().unwrap();

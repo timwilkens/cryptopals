@@ -1,3 +1,5 @@
+use util;
+
 pub fn challenge_3() -> String {
     "Cooking MC's like a pound of bacon".to_string()
 }
@@ -246,4 +248,22 @@ pub fn challenge_12() -> String {
     "Rollin' in my 5.0\nWith my rag-top down so my hair can blow\nThe girlies on standby waving \
      just to say hi\nDid you stop? No, I just drove by\n"
         .to_string()
+}
+
+pub fn challenge_17(plain_index: u32) -> Vec<u8> {
+    let base64_plaintext = match plain_index {
+        0 => "MDAwMDAwTm93IHRoYXQgdGhlIHBhcnR5IGlzIGp1bXBpbmc=",
+        1 => "MDAwMDAxV2l0aCB0aGUgYmFzcyBraWNrZWQgaW4gYW5kIHRoZSBWZWdhJ3MgYXJlIHB1bXBpbic=",
+        2 => "MDAwMDAyUXVpY2sgdG8gdGhlIHBvaW50LCB0byB0aGUgcG9pbnQsIG5vIGZha2luZw==",
+        3 => "MDAwMDAzQ29va2luZyBNQydzIGxpa2UgYSBwb3VuZCBvZiBiYWNvbg==",
+        4 => "MDAwMDA0QnVybmluZyAnZW0sIGlmIHlvdSBhaW4ndCBxdWljayBhbmQgbmltYmxl",
+        5 => "MDAwMDA1SSBnbyBjcmF6eSB3aGVuIEkgaGVhciBhIGN5bWJhbA==",
+        6 => "MDAwMDA2QW5kIGEgaGlnaCBoYXQgd2l0aCBhIHNvdXBlZCB1cCB0ZW1wbw==",
+        7 => "MDAwMDA3SSdtIG9uIGEgcm9sbCwgaXQncyB0aW1lIHRvIGdvIHNvbG8=",
+        8 => "MDAwMDA4b2xsaW4nIGluIG15IGZpdmUgcG9pbnQgb2g=",
+        9 => "MDAwMDA5aXRoIG15IHJhZy10b3AgZG93biBzbyBteSBoYWlyIGNhbiBibG93",
+        _ => panic!("Non existent plaintext"),
+    };
+
+    util::base64_to_bytes(base64_plaintext)
 }
