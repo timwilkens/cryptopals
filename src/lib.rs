@@ -411,34 +411,30 @@ pub fn bit_flip_is_admin(ciphertext: Vec<u8>) -> bool {
 }
 
 pub fn break_bit_flip() -> Vec<u8> {
-    let encrypted = bit_flip_encrypt(":admin<true".to_string());
+    let mut encrypted = bit_flip_encrypt(":admin<true".to_string());
+    let encrypted_blocks = block_cipher::break_into_blocks(encrypted.clone(), 16);
+
     // The prefix before our plaintext is exactly two blocks (32 bytes)
     // So, we need to modify the second block to produce admin=true
-    // in the third block
-    // We need to modify byte 0 and byte 6 to change this string to
+    // in the third block. We need to modify byte 0 and byte 6 to change this
+    // string to
     // ;admin=true
 
-    let mut modified_cipher: Vec<u8> = Vec::new();
+    // This gets us the state of the byte after decryption with AES but before
+    // xoring
+    // We know this should be a colon (58) since that is in the plaintext we
+    // provided
+    let xor1 = encrypted_blocks[1][0] ^ 58;
+    // xor with the character we would like in this position
+    // we are essentially solving post-aes xor x = plaintext for x where x is
+    // a byte of the previous block of ciphertext
+    encrypted[16] = xor1 ^ 59;
+    1; // semicolon
 
-    // Brute force the two bytes we need flipped
-    'outer: for byte1 in 0..127 as u8 {
-        for byte2 in 0..127 as u8 {
-            let mut mask = util::repeat_str_to_bytes("\x00", 16);
-            mask.extend([byte1; 1].to_vec());
-            mask.extend(util::repeat_str_to_bytes("\x00", 5));
-            mask.extend([byte2; 1].to_vec());
-            let bytes_remaining: u32 = (encrypted.clone().len() - mask.len()) as u32;
-            mask.extend(util::repeat_str_to_bytes("\x00", bytes_remaining));
+    let xor2 = encrypted_blocks[1][6] ^ 60; // '<' from the plaintext
+    encrypted[22] = xor2 ^ 61; // equals sign
 
-            let flipped = util::xor_bytes(encrypted.clone(), mask);
-            if bit_flip_is_admin(flipped.clone()) {
-                modified_cipher = flipped.clone();
-                break 'outer;
-            }
-        }
-    }
-
-    modified_cipher
+    encrypted.clone()
 }
 
 #[cfg(test)]
