@@ -267,3 +267,7 @@ pub fn challenge_17(plain_index: u32) -> Vec<u8> {
 
     util::base64_to_bytes(base64_plaintext)
 }
+
+pub fn challenge_18() -> Vec<u8> {
+    "Yo, VIP Let's kick it Ice, Ice, baby Ice, Ice, baby ".to_string().into_bytes()
+}

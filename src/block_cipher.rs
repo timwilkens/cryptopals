@@ -158,3 +158,26 @@ pub fn encrypt_aes_cbc_128(plaintext: Vec<u8>, key: Vec<u8>, iv: Vec<u8>) -> Vec
 
     encrypted_bytes
 }
+
+pub fn counter_mode(bytes: Vec<u8>, key: Vec<u8>, nonce: Vec<u8>) -> Vec<u8> {
+    let mut counter: u64 = 0;
+    let mut output = Vec::new();
+    let blocks = break_into_blocks(bytes, 16);
+
+    for block_num in 0..blocks.len() {
+        let mut nonce_and_counter = nonce.clone();
+        nonce_and_counter.extend(util::u64_to_le(counter));
+        let keystream = encrypt_aes_ecb_128(&nonce_and_counter, &key).unwrap();
+
+        let target_block = blocks[block_num].clone();
+        if target_block.len() != 16 {
+            let truncated = keystream.clone()[0..target_block.len()].to_vec();
+            output.extend(util::xor_bytes(truncated, target_block));
+        } else {
+            output.extend(util::xor_bytes(keystream.clone(), target_block));
+        }
+        counter += 1;
+    }
+
+    output
+}

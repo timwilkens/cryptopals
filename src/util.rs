@@ -204,3 +204,15 @@ pub fn encode_cookie(data: HashMap<String, String>) -> String {
 
     pairs.join("&")
 }
+
+pub fn u64_to_le(n: u64) -> Vec<u8> {
+    [n as u8,
+     (n >> 8) as u8,
+     (n >> 16) as u8,
+     (n >> 24) as u8,
+     (n >> 32) as u8,
+     (n >> 40) as u8,
+     (n >> 48) as u8,
+     (n >> 56) as u8]
+        .to_vec()
+}

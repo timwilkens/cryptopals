@@ -774,4 +774,25 @@ mod tests {
             assert_eq!(decrypted, solutions::challenge_17(plain_index));
         }
     }
+
+    #[test]
+    fn set_3_challenge_18() {
+        let ciphertext = util::base64_to_bytes("L77na/nrFsKvynd6HzOoG7GHTLXsTVu9qvY/2syLXzhPweyyM\
+                                                TJULu/6/kXX0KSvoOLSFQ==");
+        let key = "YELLOW SUBMARINE".to_string().into_bytes();
+        let nonce = util::u64_to_le(0u64);
+        let decrypted = block_cipher::counter_mode(ciphertext, key, nonce);
+        assert_eq!(decrypted, solutions::challenge_18());
+    }
+
+    #[test]
+    fn check_ctr_mode() {
+        let plaintext = "Rappers I monkey flip em with the funky rhythm I be kicking"
+                            .to_string()
+                            .into_bytes();
+        let key = "YELLOW SUBMARINE".to_string().into_bytes();
+        let nonce = util::random_bytes(8);
+        let encrypted = block_cipher::counter_mode(plaintext.clone(), key.clone(), nonce.clone());
+        assert_eq!(plaintext, block_cipher::counter_mode(encrypted, key, nonce));
+    }
 }
